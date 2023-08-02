@@ -1,0 +1,125 @@
+config vpn ipsec phase1-interface
+    edit $(Nama-Tunnel)
+        set interface "port1"
+        set ike-version 2
+        set peertype any
+        set net-device disable
+        set proposal des-md5
+        set add-route disable
+        set dhgrp 5
+        set auto-discovery-receiver enable
+        set remote-gw 172.23.0.26
+        set psksecret advpn123
+    next
+end
+config vpn ipsec phase2-interface
+    edit $(Nama-Tunnel)
+        set phase1name $(Nama-Tunnel)
+        set proposal des-md5
+    next
+end
+config system interface
+    edit $(Nama-Tunnel)
+        set vdom "root"
+        set ip $(IP-Tunnel)
+        set allowaccess ping
+        set type tunnel
+        set remote-ip 10.0.0.1 255.255.255.0
+        set snmp-index 13
+        set interface "port1"
+    next
+end
+config firewall address
+    edit "NET-HQ_10.10.254.0/24"
+        set allow-routing enable
+        set subnet 10.10.254.0 255.255.255.0
+    next
+    edit "NET-BR01-10.10.10.0/24"
+        set allow-routing enable
+        set subnet 10.10.10.0 255.255.255.0
+    next
+    edit "NET-BR02-10.10.20.0/24"
+        set allow-routing enable
+        set subnet 10.10.20.0 255.255.255.0
+    next
+	edit "NET-NEWBR-10.10.30.0/24"
+        set allow-routing enable
+        set subnet 10.10.30.0 255.255.255.0
+    next
+end
+config system sdwan
+    set status enable
+    config zone
+        edit "virtual-wan-link"
+        next
+        edit "ADVPN"
+        next
+    end
+    config members
+        edit 1
+            set interface $(Nama-Tunnel)
+            set zone "ADVPN"
+        next
+    end
+    config service
+        edit 1
+            set name "to-ADVPN"
+            set dst "NET-BR02-10.10.20.0/24" "NET-HQ_10.10.254.0/24" "NET-BR01-10.10.10.0/24"
+            set src "NET-NEWBR-10.10.30.0/24"
+            set priority-members 1
+            set priority-zone "ADVPN"
+        next
+    end
+end
+config firewall policy
+    edit 1
+        set name "LAN to ADVPN"
+        set srcintf "port2"
+        set dstintf "ADVPN"
+        set action accept
+        set srcaddr "NET-NEWBR-10.10.30.0/24"
+        set dstaddr "NET-BR02-10.10.20.0/24" "NET-HQ_10.10.254.0/24" "NET-BR01-10.10.10.0/24"
+        set schedule "always"
+        set service "ALL"
+        set logtraffic all
+    next
+    edit 2
+        set name "ADVPN to LAN"
+        set srcintf "ADVPN"
+        set dstintf "port2"
+        set action accept
+        set srcaddr "NET-BR02-10.10.20.0/24" "NET-HQ_10.10.254.0/24" "NET-BR01-10.10.10.0/24"
+        set dstaddr "NET-NEWBR-10.10.30.0/24"
+        set schedule "always"
+        set service "ALL"
+        set logtraffic all
+    next
+end
+config router bgp
+    set as 65000
+    set router-id 10.0.0.4
+    config neighbor
+        edit "10.0.0.1"
+            set remote-as 65000
+        next
+    end
+    config network
+        edit 1
+            set prefix 10.10.30.0 255.255.255.0
+        next
+    end
+end
+config system dhcp server
+    edit 2
+        set dns-service default
+        set default-gateway 10.10.30.1
+        set netmask 255.255.255.0
+        set interface "port2"
+        config ip-range
+            edit 1
+                set start-ip 10.10.30.2
+                set end-ip 10.10.30.254
+            next
+        end
+    next
+end
